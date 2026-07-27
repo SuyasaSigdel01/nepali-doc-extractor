@@ -1,0 +1,6 @@
+data/raw/
+data/ocr_out/
+*.env
+__pycache__/
+.venv/
+venv/
