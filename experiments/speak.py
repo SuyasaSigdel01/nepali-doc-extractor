@@ -1,7 +1,7 @@
 """
-Turn Nepali explanation sentences into an audio file.
+Turn Nepali and English explanation sentences into audio files.
 
-Uses gTTS (needs internet). For offline use, swap this one function
+Uses gTTS (needs internet). For offline use, swap the one gTTS call
 for a local engine — the rest of the pipeline doesn't change.
 """
 
@@ -29,11 +29,13 @@ if __name__ == "__main__":
 
     src = Path(sys.argv[1])
     fields = json.loads(src.read_text(encoding="utf-8"))
-    lines = explain(fields)
 
-    for line in lines:
-        print(line)
+    for lang in ("ne", "en"):
+        lines = explain(fields, lang)
+        print(f"\n--- {lang} ---")
+        for line in lines:
+            print(line)
 
-    out = Path("data/audio") / (src.stem + "_ne.mp3")
-    speak(lines, out)
-    print(f"\nsaved {out}")
+        out = Path("data/audio") / f"{src.stem}_{lang}.mp3"
+        speak(lines, out, lang)
+        print(f"saved {out}")
