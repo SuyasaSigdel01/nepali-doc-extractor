@@ -221,3 +221,30 @@ Field-level flagging rather than document-level rejection.
   (Only tested on one thermal receipt so far.)
 - Is there a confidence signal that actually tracks correctness?
 - Can the horizontal-gap fix be applied without breaking wide table columns?
+## 9. Voice explanation layer
+
+**Problem:** rendering fields as `label: value` lines produces unusable audio —
+a robot reciting a table. The target user cannot read the bill, so the output
+has to be sentences, not a table read aloud.
+
+**Design:** two separate components.
+
+1. `explain.py` — fields to Nepali sentences. Template-based, not an LLM:
+   the bill structure is fixed, so templates are deterministic, free, offline
+   and testable. An LLM here would also make offline mode impossible.
+2. `speak.py` — sentences to audio via gTTS. The engine is isolated in one
+   function so it can be swapped (Google Gemini-TTS supports ne-NP at Preview;
+   Ucharan-ai is an open-source offline option) without touching the rest.
+
+**Detail worth keeping:** amounts are rounded to whole rupees before speech.
+"रु ५६०" is natural; "रु ५६० दशमलव शून्य शून्य" is not.
+
+**Detail worth keeping:** when `meter_status` is blocked, the explanation says
+the reading was not recorded rather than reporting zero consumption. Zero
+measured and nothing measured mean different things to the person paying.
+
+**Result:** Devanagari numerals are pronounced correctly by gTTS — `रु ५६०`
+reads as expected, no digit-by-digit fallback needed.
+
+**Limitation:** gTTS requires internet, which conflicts with the offline goal.
+Offline Nepali TTS is unresolved.
