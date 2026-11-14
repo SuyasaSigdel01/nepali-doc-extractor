@@ -4,3 +4,4 @@ data/ocr_out/
 __pycache__/
 .venv/
 venv/
+data/audio/
