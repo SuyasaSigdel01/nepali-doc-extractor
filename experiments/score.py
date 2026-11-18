@@ -5,6 +5,8 @@ Compare extracted fields against ground truth and report per-field accuracy.
 import json, sys
 from pathlib import Path
 
+from experiments.speak import speak
+
 
 def compare(extracted: dict, truth: dict) -> list[tuple[str, bool, object, object]]:
     """Check each ground-truth field against what was extracted."""
@@ -31,6 +33,17 @@ def report(results):
 
 
 if __name__ == "__main__":
-    extracted = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    truth = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
-    report(compare(extracted, truth))
+    import json
+
+    src = Path(sys.argv[1])
+    fields = json.loads(src.read_text(encoding="utf-8"))
+
+    for lang in ("ne", "en"):
+        lines = explain(fields, lang)
+        print(f"\n--- {lang} ---")
+        for line in lines:
+            print(line)
+
+        out = Path("data/audio") / f"{src.stem}_{lang}.mp3"
+        speak(lines, out, lang)
+        print(f"saved {out}")
