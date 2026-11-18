@@ -30,6 +30,13 @@ AUDIO_DIR = ROOT / "data" / "audio"
 def health():
     return {"status": "ok"}
 
+WEB_DIR = ROOT / "web"
+
+
+@app.get("/")
+def index():
+    return FileResponse(WEB_DIR / "index.html")
+
 
 @app.post("/extract")
 async def extract_document(file: UploadFile = File(...)):
