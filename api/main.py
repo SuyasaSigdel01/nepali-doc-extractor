@@ -9,7 +9,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-
+from PIL import Image
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
 
@@ -25,6 +25,11 @@ app = FastAPI(title="Nepali Document Extractor")
 
 AUDIO_DIR = ROOT / "data" / "audio"
 
+MAX_UPLOAD_BYTES = 8 * 1024 * 1024          # 8 MB — a phone photo is 2-4 MB
+ALLOWED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+Image.MAX_IMAGE_PIXELS = 50_000_000         # refuse decompression bombs
+
 
 @app.get("/health")
 def health():
@@ -39,13 +44,59 @@ def index():
 
 
 @app.post("/extract")
+async def save_upload(file: UploadFile) -> Path:
+    """Stream an upload to disk, refusing anything oversized or not an image."""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_SUFFIXES:
+        raise HTTPException(415, "Unsupported file type")
+
+    written = 0
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp_path = Path(tmp.name)
+        while chunk := await file.read(64 * 1024):
+            written += len(chunk)
+            if written > MAX_UPLOAD_BYTES:
+                tmp.close()
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(413, "File too large")
+            tmp.write(chunk)
+
+    try:
+        with Image.open(tmp_path) as img:
+            img.verify()
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(415, "Not a readable image")
+
+    return tmp_path
+
 async def extract_document(file: UploadFile = File(...)):
     """Take a document photo, return fields, explanations and audio URLs."""
-    suffix = Path(file.filename or "upload.jpg").suffix or ".jpg"
+async def save_upload(file: UploadFile) -> Path:
+    """Stream an upload to disk, refusing anything oversized or not an image."""
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in ALLOWED_SUFFIXES:
+        raise HTTPException(415, "Unsupported file type")
 
+    written = 0
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        shutil.copyfileobj(file.file, tmp)
         tmp_path = Path(tmp.name)
+        while chunk := await file.read(64 * 1024):
+            written += len(chunk)
+            if written > MAX_UPLOAD_BYTES:
+                tmp.close()
+                tmp_path.unlink(missing_ok=True)
+                raise HTTPException(413, "File too large")
+            tmp.write(chunk)
+
+    try:
+        with Image.open(tmp_path) as img:
+            img.verify()
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise HTTPException(415, "Not a readable image")
+
+    return tmp_path
 
     try:
         ocr_json = run_ocr(tmp_path)
@@ -54,7 +105,7 @@ async def extract_document(file: UploadFile = File(...)):
         if len(fields) <= 1:
             raise HTTPException(422, "No recognisable fields found")
 
-        job = uuid.uuid4().hex[:8]
+        job = uuid.uuid4().hex
         result = {"fields": fields, "explanations": {}, "audio": {}}
 
         for lang in ("ne", "en"):
