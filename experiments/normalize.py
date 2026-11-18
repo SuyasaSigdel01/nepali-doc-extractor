@@ -14,6 +14,13 @@ WESTERN_DIGITS = "0123456789"
 
 DEV_TO_WEST = str.maketrans(NEP_DIGITS, WESTERN_DIGITS)
 WEST_TO_DEV = str.maketrans(WESTERN_DIGITS, NEP_DIGITS)
+# Characters OCR commonly substitutes for digits on thermal receipts.
+# Applied only when parsing numbers — never to text fields.
+OCR_DIGIT_CONFUSIONS = str.maketrans({
+    "।": "1", "|": "1", "l": "1", "I": "1",
+    "O": "0", "o": "0", "U": "0",
+    "Z": "2",
+})
 
 
 def to_western_digits(text: str) -> str:
@@ -29,9 +36,10 @@ def to_nepali_digits(text: str) -> str:
 def parse_amount(text: str) -> float | None:
     """Extract a number from OCR text, handling mixed scripts and lakh commas."""
     s = to_western_digits(text)
+    s = s.translate(OCR_DIGIT_CONFUSIONS)
     s = s.replace(",", "")
 
-    match = re.search(r"\d+(?:[.\s]\d{2})?", s)
+    match = re.search(r"\d+(?:[.\s]\d{1,2})?", s)
     if not match:
         return None
 
@@ -67,6 +75,8 @@ if __name__ == "__main__":
         (parse_amount("1१०३.२०"), 1103.2),
         (parse_amount("Rs. 2,54,000.00"), 254000.0),
         (parse_amount("no digits here"), None),
+        (parse_amount("1।03.Z0"), 1103.2),
+        (parse_amount("Rs. 2,54,000.00"), 254000.0),
         (normalize_bs_date("Reading Date: 2083-4-6 08:29"), "2083-04-06"),
         (normalize_bs_date("मिति: २०८३/०१ /१६"), "2083-01-16"),
         (normalize_bs_date("2080/09/15"), "2080-09-15"),

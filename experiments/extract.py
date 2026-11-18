@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
-from normalize import parse_amount, normalize_bs_date, clean_text
+from normalize import parse_amount, normalize_bs_date, clean_text, to_western_digits
 
 NUMERIC_FIELDS = {
     "previous_unit", "current_unit", "consumed_unit",
@@ -42,60 +42,64 @@ NUMERIC_FIELDS = {
 }
 
 DATE_FIELDS = {"reading_date_bs", "connection_date_bs"}
+NULL_MARKERS = {"", "-", "NA", "N/A", "NJA", "NIA"}
 from difflib import SequenceMatcher
 
 
 def label_similarity(line: str, label: str) -> float:
     """How closely does the start of this line resemble the label?"""
-    head = line[:len(label) + 4].lower()
-    return SequenceMatcher(None, head, label.lower()).ratio()
+    return SequenceMatcher(None, line[:len(label)].lower(), label.lower()).ratio()
 
 
-def match_field(line: str, threshold: float = 0.7) -> str | None:
-    """Return the field name whose label best matches this line, if any."""
-    best_field = None
-    best_score = threshold
+def match_field(line: str, threshold: float = 0.7) -> tuple[str, str] | None:
+    """Return (field, matched_label) for the best label match on this line."""
+    best = None
+    best_key = (threshold, 0)
 
     for field, labels in WATER_BILL_FIELDS.items():
         for label in labels:
-            score = label_similarity(line, label)
-            if score > best_score:
-                best_score = score
-                best_field = field
+            key = (label_similarity(line, label), len(label))
+            if key > best_key:
+                best_key = key
+                best = (field, label)
 
-    return best_field
-def split_value(line: str) -> str:
-    """Take everything after the first separator as the value."""
-    parts = re.split(r"[:：]", line, maxsplit=1)
-    if len(parts) == 2:
-        return clean_text(parts[1])
+    return best
 
-    # OCR often drops the colon — fall back to the first run of 2+ spaces
-    parts = re.split(r"\s{2,}", line, maxsplit=1)
-    if len(parts) == 2:
-        return clean_text(parts[1])
 
-    return ""
+def split_value(line: str, label: str) -> str:
+    """Everything after the matched label is the value."""
+    rest = line[len(label):]
+    rest = re.sub(r"^[\s:ः।.\-]+", "", rest)
+    return clean_text(rest)
 
 
 def coerce(field: str, raw: str):
     """Convert the raw value to the right type for this field."""
+    raw = to_western_digits(raw)
+
+    if raw.strip().upper() in NULL_MARKERS:
+        return None
     if field in NUMERIC_FIELDS:
         return parse_amount(raw)
     if field in DATE_FIELDS:
         return normalize_bs_date(raw)
     return raw or None
 
+
 def extract_fields(lines: list[str]) -> dict:
     """Walk the reordered OCR lines and pull out whatever fields we recognise."""
     out = {"document_type": "water_bill"}
 
     for line in lines:
-        field = match_field(line)
-        if not field or field in out:
-            continue          # keep the first match, ignore later repeats
+        match = match_field(line)
+        if not match:
+            continue
 
-        value = coerce(field, split_value(line))
+        field, label = match
+        if field in out:
+            continue
+
+        value = coerce(field, split_value(line, label))
         if value is not None:
             out[field] = value
 
