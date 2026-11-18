@@ -1,134 +1,130 @@
 # Nepali Document Extractor
 
-Photograph a Nepali utility bill and hear what it says — in Nepali or English.
+Photograph a Nepali bill or notice, and get back what it says — as structured
+data, as plain-language sentences, and as spoken audio in Nepali or English.
 
-Most bills and official notices in Nepal are printed in English, or in a mix of
-English labels and Devanagari values. For someone who doesn't read English
-comfortably, a water bill is a page of numbers with no way in. This reads the
-bill aloud and says what each number means.
+## Why
 
-## What it does
+Many documents Nepali households receive are printed in English, or in dense
+formal Nepali. A Khanepani water bill reports `Meter Status: METER BLOCKED` and
+`Payable Amount: 1103.20` — the two lines that matter most — in a language a
+large share of its recipients cannot read.
 
-1. You photograph a bill from a phone.
-2. OCR reads the text and reconstructs reading order from bounding boxes.
-3. Fields are matched against known label variants and normalised.
-4. A plain-language explanation is generated in both Nepali and English.
-5. Both versions are spoken aloud as audio.
+The output of this project is not a JSON blob. It is a sentence:
 
-No LLM in the extraction path. That was deliberate: field extraction here is
-deterministic and auditable, and a model that hallucinates a plausible-looking
-amount on someone's water bill is worse than one that says it couldn't read it.
+> तपाईंको श्रावण महिनाको पानीको बिल रु ५६० छ।
+> मिटर बन्द भएकोले यस पटक पानीको खपत रेकर्ड भएन।
+> पहिलेको बाँकी रु ५४३ सहित जम्मा रु १,१०३ तिर्नुपर्नेछ।
 
-## Results
+and the same thing read aloud, for someone who cannot read at all.
 
-Measured against hand-labeled ground truth, 27 fields per document:
+## Pipeline
 
-| Document | Baseline | After extraction fixes |
+```
+photo → preprocess → OCR → reading-order → field extraction
+                                              ↓
+                              normalise (digits, dates, amounts)
+                                              ↓
+                          explanation templates (Nepali / English)
+                                              ↓
+                                      text + audio
+```
+
+| Stage | File | What it does |
 |---|---|---|
-| `water_bill_jestha` | 11.1% (3/27) | 48.1% (13/27) |
-| `water_bill_shrawan` | 25.9% (7/27) | 59.3% (16/27) |
-| **Overall** | **18.5%** | **53.7%** |
+| OCR | `experiments/ocr.py` | EasyOCR (`ne`+`en`), model loaded once and reused |
+| Batch OCR | `experiments/batch_ocr.py` | Runs across `data/raw/`, resumable |
+| Preprocess | `experiments/preprocess.py` | Greyscale, 2x upscale, CLAHE |
+| Reading order | `experiments/reorder.py` | Rebuilds rows from bounding boxes |
+| Normalise | `experiments/normalize.py` | Devanagari↔Western digits, amounts, BS dates |
+| Extract | `experiments/extract.py` | Fuzzy label matching → structured fields |
+| Explain | `experiments/explain.py` | Fields → Nepali/English sentences |
+| Speak | `experiments/speak.py` | Sentences → mp3 |
+| Score | `experiments/score.py` | Field-level accuracy against ground truth |
+| API | `api/main.py` | FastAPI: upload image, get fields + text + audio |
 
-Reproduce with `python experiments/evaluate.py`.
+## Dataset
 
-**The eval set is two documents.** Seventeen were collected, two are labeled.
-The percentages are a development signal, not a benchmark, and they're reported
-here as such.
+No public dataset exists for Nepali document field extraction. The public
+Nepali OCR resources are character-level handwriting sets, which do not help
+with "find the total on this bill."
 
-### What moved the number
+So the evaluation set was collected by hand: **17 documents** spanning six
+print formats — thermal receipt, dot-matrix carbon copy, printed tax invoice,
+institutional notice, printed ledger, and handwritten shop bill. Both numeral
+systems appear across the set.
 
-Three fixes, all in the extraction layer, none in OCR:
+The documents are not committed. They carry real names, addresses, customer
+IDs and phone numbers.
 
-- **Label-aware value splitting.** The parser looked for a colon or two spaces
-  to separate label from value. OCR supplies neither — `'Previouis Unit ४४४ ००'`
-  has one space and no colon. Since the matcher already knows which label it
-  matched, it now slices the label off the front instead of guessing at
-  separators. Nine fields recovered.
-- **Similarity scoring on short labels.** Labels were compared against
-  `line[:len(label) + 4]`, so `"Name"` was judged against eight characters and
-  scored 0.667 — below the 0.7 threshold. Correct label, impossible test.
-- **OCR digit confusions.** `1103.20` is read as `1।03.Z0` on thermal paper.
-  A substitution table (danda → 1, Z → 2, O → 0) applied **only inside tokens
-  that already contain a digit** fixes it without turning the word "no" into a
-  zero.
+## What the data showed
 
-### What's still wrong
+Findings from the sample set, in full in `experiments/NOTES.md`:
 
-The residual errors are character-level OCR damage, not matching logic:
+**Schema drift within one issuer.** Two Khanepani receipts, same customer, two
+months apart: one prints `Zone` / `Ward`, the other prints `Area` / `Sub Area`
+for the same fields. A parser matching literal label text breaks silently when
+the template changes. This is the argument for fuzzy matching over regex.
 
-| Field | Got | Want |
-|---|---|---|
-| `previous_unit` | `444.0` | `488.0` |
-| `current_unit` | `448.0` | `488.0` |
-| `reader_name` | — | `MONA SHRESTHA` (OCR: `SHIRESTHA`) |
-| `reading_date_bs` | — | `2083-02-10` (OCR: `20U3`) |
+**Two numeral systems, sometimes inside one value.** Notices print `२०८३`,
+receipts print `2083`, and after preprocessing a single amount came back as
+`5६0.0०` — Latin and Devanagari digits interleaved. Normalisation has to work
+character by character, not per-string.
 
-Devanagari numerals on thermal receipts are where this breaks down: `४८८`
-reads as `४४४`, `२०८३` as `२०४३`. An image preprocessing pass
-(greyscale + 2× upscale + CLAHE) fixed some fields and regressed others, which
-is what motivates the planned hybrid design — OCR for printed documents, a
-vision model for thermal receipts.
+**OCR confidence tracks length, not correctness.** A 28-character Devanagari
+line scored 0.41 and was completely correct; a 2-character line scored 1.00.
+Every extra character is another chance for the model to be unsure. A naive
+confidence threshold would flag correct long text and pass short text unchecked.
 
-## Scope
+**Bounding boxes are load-bearing.** EasyOCR returns regions in detection
+order, not reading order — one word arrived 59th of 61 despite belonging to a
+table row two-thirds up the page. Grouping regions by vertical centre and
+sorting by x recovers both the reading order and the table columns.
 
-- **Printed documents only.** Handwriting is flagged for manual review rather
-  than guessed at.
-- **Khanepani water bills** are the only template with a field schema so far.
-  Other document types return `422 No recognisable fields found` rather than
-  inventing output.
-- **No fraud detection, no medical documents.** Both were considered and
-  dropped as unsafe to automate.
+**Preprocessing helps, partially.** Greyscale + 2x upscale + CLAHE corrected a
+wrong year (2043 → 2083), the customer ID, and most lost decimal points — but
+did not fix the meter readings (488 read as 484 and 448), and one field that
+had been correct regressed. Conclusion: route by document type rather than
+applying one pipeline to everything.
+
+**Handwriting fails per-cell, not per-document.** On handwritten shop bills the
+printed structure reads fine and only the written-in cells fail. The system
+flags those cells for manual entry instead of rejecting the document.
+
+## Status
+
+Working end to end for Khanepani water bills: upload a photo to the API, get
+fields, bilingual explanations, and two audio files back.
+
+**Not yet measured.** Ground truth exists for two water bills; the scorer is
+written but has not been run. There is no accuracy figure in this README
+because there is not yet an honest one to report.
+
+## Limitations
+
+- Field extraction covers one document type (Khanepani water bills)
+- Thermal receipts misread meter readings even after preprocessing
+- Handwritten content is detected and flagged, never transcribed
+- Row grouping merges logos into header rows when they sit at the same height
+- The row threshold is hardcoded in pixels and is resolution-dependent
+- BS→AD date conversion is not implemented (dates are normalised, not converted)
+- TTS uses gTTS, which requires internet — this conflicts with the offline goal
 
 ## Running it
 
 ```bash
 python -m venv .venv
-.venv\Scripts\Activate.ps1        # Windows
+.venv\Scripts\Activate.ps1          # Windows
 pip install -r requirements.txt
 
+# single document
+python experiments/first_ocr.py data/raw/<image>.jpg
+python experiments/reorder.py data/ocr_out/<image>.json
+
+# API
 python -m uvicorn api.main:app --reload
+# then open http://127.0.0.1:8000/docs
 ```
 
-Open `http://127.0.0.1:8000`. To use it from a phone on the same network,
-bind wider with `--host 0.0.0.0` and visit `http://<your-ip>:8000`.
-
-Audio generation calls Google TTS, so that step needs internet. Everything
-else runs locally.
-
-### API
-
-| Endpoint | Purpose |
-|---|---|
-| `GET /` | Mobile web client |
-| `POST /extract` | Image in; fields, explanations and audio URLs out |
-| `GET /audio/{name}` | Generated mp3 |
-| `GET /health` | Liveness check |
-
-## Layout
-
-```
-api/main.py            FastAPI service
-web/index.html         Mobile client — camera capture, bilingual playback
-labels/                Bilingual display labels per document type
-experiments/
-  ocr.py               Shared OCR entry point, model loaded once
-  batch_ocr.py         Bulk OCR over the sample set
-  reorder.py           Reading-order reconstruction from bounding boxes
-  preprocess.py        Greyscale / upscale / CLAHE experiment
-  extract.py           Label matching and field extraction
-  normalize.py         Digits, amounts, BS dates, OCR confusions
-  explain.py           Plain-language bilingual explanations
-  speak.py             Text to speech
-  score.py             Per-field comparison against ground truth
-  evaluate.py          Scoring across every labeled document
-  show_lines.py        Debugging aid — what the extractor actually sees
-```
-
-Sample documents and ground truth are not committed: they contain a real
-customer's name, address and phone number.
-
-## Next
-
-- Label more of the seventeen collected documents so the eval set means something
-- Vision-model path for thermal receipts
-- Field schemas for electricity bills and institutional notices
+`data/` is gitignored, so a fresh clone has no images. Populate `data/raw/`
+before running the batch scripts.
