@@ -40,7 +40,7 @@
         "bill_amount": "This Month's Bill",
         "due_amount": "Due Amount",
         "outstanding_amount": "Outstanding Amount",
-        "advance_amount": "Payable Amount",
+        "advance_amount": "Advance Amount",
         "payable_amount": "Total Payable"
     }
 }
