@@ -32,6 +32,29 @@ def to_nepali_digits(text: str) -> str:
     """Convert any Western digits in a string to Devanagari digits."""
     return text.translate(WEST_TO_DEV)
 
+def _apply_digit_confusions(text: str) -> str:
+    """Fix OCR digit confusions, but only inside tokens that already hold a digit."""
+    return " ".join(
+        token.translate(OCR_DIGIT_CONFUSIONS) if any(c.isdigit() for c in token) else token
+        for token in text.split()
+    )
+
+
+def parse_amount(text: str) -> float | None:
+    """Extract a number from OCR text, handling mixed scripts and lakh commas."""
+    s = to_western_digits(text)
+    s = _apply_digit_confusions(s)
+    s = s.replace(",", "")
+
+    match = re.search(r"\d+(?:[.\s]\d{1,2})?", s)
+    if not match:
+        return None
+
+    num = match.group().replace(" ", ".")
+    try:
+        return float(num)
+    except ValueError:
+        return None
 
 def parse_amount(text: str) -> float | None:
     """Extract a number from OCR text, handling mixed scripts and lakh commas."""

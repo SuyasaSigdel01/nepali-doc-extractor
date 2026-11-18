@@ -8,7 +8,7 @@ including OCR's own misreadings of the label text.
 WATER_BILL_FIELDS = {
     "reading_month":      ["Reading Month"],
     "reading_date_bs":    ["Reading Date"],
-    "area":               ["Area", "Zone", "rea"],
+    "area":               ["Area", "Zone"],
     "sub_area":           ["Sub Area", "Ward", "Sub Alea"],
     "area_no":            ["Area no"],
     "customer_type":      ["Customer type"],
