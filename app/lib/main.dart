@@ -293,7 +293,8 @@ class _HomePageState extends State<HomePage> {
   Widget _buildResult(ColorScheme scheme) {
     final r = _result!;
     final payable = r.fields['payable_amount'];
-    final lines = r.explanations[_lang] ?? const [];
+    final subject = r.fields['subject'];
+    final issuer = r.fields['issuer'];final lines = r.explanations[_lang] ?? const [];
 
     final detail = Map<String, dynamic>.from(r.fields)
       ..remove('document_type')
@@ -302,34 +303,22 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       children: [
-        if (payable is num)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
-            decoration: BoxDecoration(
-              color: scheme.primary,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  _lang == 'ne' ? 'तिर्नुपर्ने रकम' : 'Total payable',
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: scheme.onPrimary.withValues(alpha: 0.85),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  '${_lang == 'ne' ? 'रु ' : 'Rs '}${formatAmount(payable, _lang)}',
-                  style: TextStyle(
-                    fontSize: 46,
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onPrimary,
-                  ),
-                ),
-              ],
-            ),
+                if (payable is num)
+          _hero(
+            scheme,
+            label: _lang == 'ne' ? 'तिर्नुपर्ने रकम' : 'Total payable',
+            value: '${_lang == 'ne' ? 'रु ' : 'Rs '}'
+                '${formatAmount(payable, _lang)}',
+            valueSize: 46,
+          )
+        else if (subject is String && subject.isNotEmpty)
+          _hero(
+            scheme,
+            label: issuer is String && issuer.isNotEmpty
+                ? issuer
+                : (_lang == 'ne' ? 'सूचना' : 'Notice'),
+            value: subject,
+            valueSize: 26,
           ),
         const SizedBox(height: 16),
         FilledButton.icon(
@@ -403,4 +392,40 @@ class _HomePageState extends State<HomePage> {
       ],
     );
   }
+    Widget _hero(
+    ColorScheme scheme, {
+    required String label,
+    required String value,
+    required double valueSize,
+  }) =>
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+        decoration: BoxDecoration(
+          color: scheme.primary,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Column(
+          children: [
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: scheme.onPrimary.withValues(alpha: 0.85),
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: valueSize,
+                fontWeight: FontWeight.w600,
+                color: scheme.onPrimary,
+              ),
+            ),
+          ],
+        ),
+      );
 }
