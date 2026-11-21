@@ -9,6 +9,7 @@ Handles the recurring problems found in OCR output:
 """
 
 import re
+import nepali_datetime as nd
 
 NEP_DIGITS = "०१२३४५६७८९"
 WESTERN_DIGITS = "0123456789"
@@ -24,7 +25,18 @@ OCR_DIGIT_CONFUSIONS = str.maketrans({
     "Z": "2",
 })
 
+def bs_to_ad(bs_date: str) -> str | None:
+    """Convert a 'YYYY-MM-DD' Bikram Sambat date to the Gregorian equivalent.
 
+    Returns None for anything unparseable or outside the library's range,
+    rather than raising — a bad date on one field shouldn't kill extraction.
+    """
+    try:
+        year, month, day = (int(p) for p in bs_date.split("-"))
+        return nd.date(year, month, day).to_datetime_date().isoformat()
+    except Exception:
+        return None
+    
 def to_western_digits(text: str) -> str:
     """Convert any Devanagari digits in a string to Western digits."""
     return text.translate(DEV_TO_WEST)
@@ -90,6 +102,9 @@ if __name__ == "__main__":
         (normalize_bs_date("मिति: २०८३/०१ /१६"), "2083-01-16"),
         (normalize_bs_date("2080/09/15"), "2080-09-15"),
         (clean_text("  कक्षा   सञ्चालन  "), "कक्षा सञ्चालन"),
+        (bs_to_ad("2080-09-15"), "2023-12-31"),
+        (bs_to_ad("not a date"), None),
+        (bs_to_ad("9999-13-45"), None),
     ]
 
     for got, want in checks:

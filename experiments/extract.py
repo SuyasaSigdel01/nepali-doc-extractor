@@ -31,7 +31,7 @@ import re
 import json
 import sys
 from pathlib import Path
-
+from normalize import parse_amount, normalize_bs_date, clean_text, bs_to_ad
 sys.path.insert(0, str(Path(__file__).parent))
 from normalize import parse_amount, normalize_bs_date, clean_text, to_western_digits
 
@@ -102,6 +102,11 @@ def extract_fields(lines: list[str]) -> dict:
         value = coerce(field, split_value(line, label))
         if value is not None:
             out[field] = value
+            
+        if field in DATE_FIELDS:
+            ad = bs_to_ad(value)
+            if ad:
+                out[field.replace("_bs", "_ad")] = ad
 
     return out
 
