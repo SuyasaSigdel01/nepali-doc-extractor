@@ -31,5 +31,8 @@ if __name__ == "__main__":
     from extract import lines_from_ocr_json
 
     for path in sorted(Path("data/ocr_out").glob("*.json")):
-        lines = lines_from_ocr_json(path)
-        print(f"{classify(lines):12}  {path.stem}")
+        print(f"{classify(lines_from_ocr_json(path)):12}  {path.stem}")
+
+    for path in sorted(Path("experiments/fixtures").glob("*.txt")):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        print(f"{classify(lines):12}  {path.stem}  (fixture)")
