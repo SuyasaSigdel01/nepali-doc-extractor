@@ -92,6 +92,10 @@ class _HomePageState extends State<HomePage> {
   ExtractResult? _result;
   bool _playing = false;
 
+  final _questionController = TextEditingController();
+  String? _answer;
+  bool _askBusy = false;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +106,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _questionController.dispose();
     _player.dispose();
     super.dispose();
   }
@@ -148,6 +153,34 @@ class _HomePageState extends State<HomePage> {
           : 'Could not connect. Check the server is running.');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+    Future<void> _askQuestion() async {
+    final q = _questionController.text.trim();
+    if (q.isEmpty || _result == null) return;
+    setState(() { _askBusy = true; _answer = null; });
+    try {
+      final res = await http.post(
+        Uri.parse('$apiBase/ask'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'question': q,
+          'fields': _result!.fields,
+          'lang': _lang,
+        }),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
+        setState(() => _answer = data['answer'] as String);
+        await _player.play(UrlSource('$apiBase${data['audio']}'));
+      }
+    } catch (e) {
+      setState(() => _answer = _lang == 'ne'
+          ? 'जडान हुन सकेन।'
+          : 'Could not connect.');
+    } finally {
+      if (mounted) setState(() => _askBusy = false);
     }
   }
 
