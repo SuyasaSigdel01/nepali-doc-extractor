@@ -229,6 +229,76 @@ has to be sentences, not a table read aloud.
 
 **Design:** two separate components.
 
+## 10. Two document classes need two pipelines
+
+**Observed:** bills and notices are structurally different kinds of document.
+
+A bill is labelled fields — `Payable Amount: 1103.20`. Find the label, take
+the value. A notice is prose: there is no label called "venue" or "deadline",
+it's a sentence. Forcing notices through the bill extractor finds nothing.
+
+**Design:**
+
+```
+bills, receipts, invoices  ->  field extraction  ->  templated explanation
+notices, letters           ->  issuer/date/subject  ->  spoken summary
+```
+
+`classify.py` picks the path before extraction runs. It uses two signals:
+four or more fuzzy label matches means a bill; the presence of सूचना (or the
+OCR-mangled सुचना, which drops the long matra) means a notice.
+
+**Caveat:** the threshold of four is a guess validated against one fixture.
+That is not evidence. It needs testing against the full sample set once the
+images are available.
+
+---
+
+## 11. Notices are summarised, not transcribed
+
+**Observed:** the KEC notice body, extracted whole, runs to the entire class
+timetable plus a William Arthur Ward quote off the footer. Read aloud that
+is two minutes of someone reciting a table.
+
+**Decision:** the spoken summary says who issued the notice, when, and what
+it is about. The body stays on screen for anyone who can read it.
+
+> काठमाण्डौं इन्जिनियरिङ्ग कलेजले २०८३ साल बैशाख १६ गते कक्षा सञ्चालन
+> सम्बन्धी सूचना जारी गरेको छ।
+
+A bill has four numbers, so reading all of it works. A notice does not.
+Output length should follow the document, not one rule for everything.
+
+---
+
+## 12. Latin noise stripping — a general fix for finding 5
+
+Finding 5 noted that y-band row grouping sweeps logo fragments into header
+lines: `ENG काठमाण्डौं इन्जिनियरिङ्ग कलेज`.
+
+Rather than blocklisting "ENG", "ACM", "Estd" — which would only ever work
+on KEC letterheads — `extract_notice` uses a general rule: on a line that is
+predominantly Devanagari, isolated Latin tokens are almost certainly logo
+fragments, so drop them. This generalises to any institution's letterhead.
+
+Verified on the KEC fixture: issuer extracts as
+`काठमाण्डौं इन्जिनियरिङ्ग कलेज`, with `ENG` removed.
+
+---
+
+## 13. Unresolved — Devanagari inside English speech
+
+The English summary keeps the issuer name and subject in Devanagari, because
+they are proper nouns:
+
+> काठमाण्डौं इन्जिनियरिङ्ग कलेज issued a notice on 29 April 2026: कक्षा सञ्चालन
+> सम्बन्धी सूचना
+
+An English TTS voice will mispronounce or skip those. Same problem seen
+earlier with `श्रावण` on the water bill. Options are transliteration
+(`Kathmandu Engineering College`) or accepting it. Currently accepted,
+and recorded here so it is a choice rather than an oversight.
+
 1. `explain.py` — fields to Nepali sentences. Template-based, not an LLM:
    the bill structure is fixed, so templates are deterministic, free, offline
    and testable. An LLM here would also make offline mode impossible.
