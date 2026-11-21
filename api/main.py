@@ -22,7 +22,14 @@ from explain import explain
 from speak import speak
 
 app = FastAPI(title="Nepali Document Extractor")
+from fastapi.middleware.cors import CORSMiddleware
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 AUDIO_DIR = ROOT / "data" / "audio"
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024          # 8 MB — a phone photo is 2-4 MB
