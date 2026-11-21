@@ -17,12 +17,13 @@ WESTERN_DIGITS = "0123456789"
 DEV_TO_WEST = str.maketrans(NEP_DIGITS, WESTERN_DIGITS)
 WEST_TO_DEV = str.maketrans(WESTERN_DIGITS, NEP_DIGITS)
 
-# Characters OCR commonly substitutes for digits on thermal receipts.
-# Applied only inside tokens that already contain a digit.
-OCR_DIGIT_CONFUSIONS = str.maketrans({
+# Characters OCR commonly returns in place of digits. Applied only inside
+# parse_amount, where we already know the field should be numeric —
+# substituting these in free text would corrupt real words.
+DIGIT_CONFUSIONS = str.maketrans({
     "।": "1", "|": "1", "l": "1", "I": "1",
-    "O": "0", "o": "0", "U": "0",
-    "Z": "2",
+    "O": "0", "o": "0", "D": "0",
+    "Z": "2", "S": "5", "B": "8", "G": "6",
 })
 
 def bs_to_ad(bs_date: str) -> str | None:
@@ -56,21 +57,34 @@ def _apply_digit_confusions(text: str) -> str:
 
 
 def parse_amount(text: str) -> float | None:
-    """Extract a number from OCR text, handling mixed scripts and lakh commas."""
-    s = to_western_digits(text)
-    s = _apply_digit_confusions(s)
-    s = s.replace(",", "")
+    """Extract a number from OCR text, handling mixed scripts and lakh commas.
 
-    match = re.search(r"\d+(?:[.\s]\d{1,2})?", s)
+    OCR drops decimal points on thermal receipts, leaving a space: `1 103 20`
+    is 1103.20. The trailing group is the decimals, so join everything before
+    it and treat a final two-digit group as the fractional part.
+    """
+    s = to_western_digits(text).replace(",", "")
+
+    # Only attempt confusion correction if there is at least one real digit.
+    # Without this guard, "no digits here" becomes "n0 digits here".
+    if not any(c.isdigit() for c in s):
+        return None
+    s = s.translate(DIGIT_CONFUSIONS)
+
+    match = re.search(r"\d[\d.\s]*\d|\d", s)
     if not match:
         return None
 
-    num = match.group().replace(" ", ".")
+    raw = match.group()
     try:
-        return float(num)
+        if "." in raw:
+            return float(raw.replace(" ", ""))
+        parts = raw.split()
+        if len(parts) > 1 and len(parts[-1]) == 2:
+            return float("".join(parts[:-1]) + "." + parts[-1])
+        return float("".join(parts))
     except ValueError:
         return None
-
 
 def normalize_bs_date(text: str) -> str | None:
     """Pull a BS date out of OCR text and return it as YYYY-MM-DD."""
