@@ -7,6 +7,7 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
+from pydantic import BaseModel
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -122,3 +123,22 @@ def get_audio(name: str):
     if not path.is_file() or AUDIO_DIR.resolve() not in path.parents:
         raise HTTPException(404, "Not found")
     return FileResponse(path, media_type="audio/mpeg")
+
+class AskRequest(BaseModel):
+    question: str
+    fields: dict
+    lang: str = "ne"
+
+
+@app.post("/ask")
+async def ask_question(req: AskRequest):
+    """Answer a user question about an already-extracted document."""
+    from explain import answer_question  # noqa: E402
+    spoken = answer_question(req.fields, req.question, req.lang)
+    job = uuid.uuid4().hex[:8]
+    audio_path = AUDIO_DIR / f"{job}_ask.mp3"
+    speak([spoken], audio_path, req.lang)
+    return {
+        "answer": spoken,
+        "audio": f"/audio/{job}_ask.mp3",
+    }

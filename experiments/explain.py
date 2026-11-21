@@ -123,3 +123,54 @@ def format_ad_for_speech(iso: str) -> str:
         return f"{int(day)} {MONTHS_EN[int(month) - 1]} {year}"
     except (ValueError, IndexError):
         return iso
+
+def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
+    """Answer a simple question about the extracted bill fields."""
+    ne = lang == "ne"
+    q = question.lower().strip()
+
+    payable = fields.get("payable_amount")
+    due = fields.get("due_amount")
+    bill = fields.get("bill_amount")
+    consumed = fields.get("consumed_unit")
+    name = fields.get("customer_name") or fields.get("name")
+    meter = fields.get("meter_status", "")
+    month = fields.get("reading_month")
+
+    # payable / total
+    if any(w in q for w in ["tir", "pay", "jamma", "total", "kitti", "kati"]):
+        if payable is not None:
+            return f"{'जम्मा तिर्नुपर्ने रकम' if ne else 'Total payable'}: {'रू ' if ne else 'Rs '}{round(payable):,}"
+        elif bill is not None:
+            return f"{'बिल रकम' if ne else 'Bill amount'}: {'रू ' if ne else 'Rs '}{round(bill):,}"
+
+    # due / baaki
+    if any(w in q for w in ["due", "baaki", "baki", "outstanding"]):
+        if due is not None:
+            return f"{'बाँकी रकम' if ne else 'Due amount'}: {'रू ' if ne else 'Rs '}{round(due):,}"
+        return "बाँकी रकम छैन।" if ne else "No due amount found."
+
+    # consumed units
+    if any(w in q for w in ["unit", "khapat", "paani", "water", "consum"]):
+        if consumed is not None:
+            return f"{'खपत' if ne else 'Consumed'}: {round(consumed)} {'युनिट' if ne else 'units'}"
+        return "खपत विवरण भेटिएन।" if ne else "Consumption data not found."
+
+    # meter status
+    if any(w in q for w in ["meter", "miṭar", "block", "status"]):
+        return f"{'मिटर स्थिति' if ne else 'Meter status'}: {meter or ('अज्ञात' if ne else 'unknown')}"
+
+    # name
+    if any(w in q for w in ["name", "naam", "ko", "customer"]):
+        return f"{'नाम' if ne else 'Name'}: {name or ('भेटिएन' if ne else 'not found')}"
+
+    # month
+    if any(w in q for w in ["month", "mahina", "mahena"]):
+        return f"{'महिना' if ne else 'Month'}: {month or ('भेटिएन' if ne else 'not found')}"
+
+    # fallback
+    return (
+        "माफ गर्नुस्, यो प्रश्नको जवाफ दिन सकिएन।"
+        if ne else
+        "Sorry, I could not answer that question from the bill."
+    )
