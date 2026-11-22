@@ -146,27 +146,32 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
             return f"{'बिल रकम' if ne else 'Bill amount'}: {'रू ' if ne else 'Rs '}{round(bill):,}"
 
     # due / baaki
-    if any(w in q for w in ["due", "baaki", "baki", "outstanding"]):
+    if any(w in q for w in ["due", "baaki", "baki", "outstanding",
+                            "बाँकी", "बाकी", "बक्यौता"]):
         if due is not None:
             return f"{'बाँकी रकम' if ne else 'Due amount'}: {'रू ' if ne else 'Rs '}{round(due):,}"
         return "बाँकी रकम छैन।" if ne else "No due amount found."
 
     # consumed units
-    if any(w in q for w in ["unit", "khapat", "paani", "water", "consum"]):
+    if any(w in q for w in ["unit", "khapat", "paani", "water", "consum",
+                            "युनिट", "खपत"]):
         if consumed is not None:
             return f"{'खपत' if ne else 'Consumed'}: {round(consumed)} {'युनिट' if ne else 'units'}"
         return "खपत विवरण भेटिएन।" if ne else "Consumption data not found."
 
     # meter status
-    if any(w in q for w in ["meter", "miṭar", "block", "status"]):
+    if any(w in q for w in ["meter", "miṭar", "block", "status",
+                            "मिटर", "मीटर", "स्थिति"]):
         return f"{'मिटर स्थिति' if ne else 'Meter status'}: {meter or ('अज्ञात' if ne else 'unknown')}"
 
     # name
-    if any(w in q for w in ["name", "naam", "ko", "customer"]):
+    if any(w in q for w in ["name", "naam", "customer",
+                            "नाम"]):
         return f"{'नाम' if ne else 'Name'}: {name or ('भेटिएन' if ne else 'not found')}"
 
     # month
-    if any(w in q for w in ["month", "mahina", "mahena"]):
+    if any(w in q for w in ["month", "mahina", "mahena",
+                            "महिना", "मैना"]):
         return f"{'महिना' if ne else 'Month'}: {month or ('भेटिएन' if ne else 'not found')}"
 
     # fallback
