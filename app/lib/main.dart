@@ -1,8 +1,7 @@
 import 'dart:convert';
-
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:audioplayers/audioplayers.dart';
 import 'package:image_picker/image_picker.dart';
 
 const apiBase = 'http://127.0.0.1:8000';
@@ -14,8 +13,6 @@ String toNepaliDigits(String s) => s.split('').map((c) {
       return i == -1 ? c : _nepDigits[i];
     }).join();
 
-/// Group with commas and switch script. Note: uses Western 3-digit grouping,
-/// not lakh grouping — fine for bill-sized amounts, revisit for larger numbers.
 String formatAmount(num value, String lang) {
   final digits = value.round().toString();
   final buf = StringBuffer();
@@ -123,6 +120,7 @@ class _HomePageState extends State<HomePage> {
       _busy = true;
       _error = null;
       _result = null;
+      _answer = null;
     });
 
     try {
@@ -156,10 +154,24 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-    Future<void> _askQuestion() async {
+  Future<void> _togglePlay() async {
+    final url = _result?.audio[_lang];
+    if (url == null) return;
+
+    if (_playing) {
+      await _player.pause();
+    } else {
+      await _player.play(UrlSource('$apiBase$url'));
+    }
+  }
+
+  Future<void> _askQuestion() async {
     final q = _questionController.text.trim();
     if (q.isEmpty || _result == null) return;
-    setState(() { _askBusy = true; _answer = null; });
+    setState(() {
+      _askBusy = true;
+      _answer = null;
+    });
     try {
       final res = await http.post(
         Uri.parse('$apiBase/ask'),
@@ -181,17 +193,6 @@ class _HomePageState extends State<HomePage> {
           : 'Could not connect.');
     } finally {
       if (mounted) setState(() => _askBusy = false);
-    }
-  }
-
-  Future<void> _togglePlay() async {
-    final url = _result?.audio[_lang];
-    if (url == null) return;
-
-    if (_playing) {
-      await _player.pause();
-    } else {
-      await _player.play(UrlSource('$apiBase$url'));
     }
   }
 
@@ -327,7 +328,8 @@ class _HomePageState extends State<HomePage> {
     final r = _result!;
     final payable = r.fields['payable_amount'];
     final subject = r.fields['subject'];
-    final issuer = r.fields['issuer'];final lines = r.explanations[_lang] ?? const [];
+    final issuer = r.fields['issuer'];
+    final lines = r.explanations[_lang] ?? const [];
 
     final detail = Map<String, dynamic>.from(r.fields)
       ..remove('document_type')
@@ -336,7 +338,7 @@ class _HomePageState extends State<HomePage> {
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
       children: [
-                if (payable is num)
+        if (payable is num)
           _hero(
             scheme,
             label: _lang == 'ne' ? 'तिर्नुपर्ने रकम' : 'Total payable',
@@ -422,10 +424,65 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
         ),
+        const SizedBox(height: 16),
+        Card(
+          elevation: 0,
+          color: scheme.surfaceContainerHighest,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _lang == 'ne' ? 'प्रश्न सोध्नुहोस्' : 'Ask a question',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _questionController,
+                        decoration: InputDecoration(
+                          hintText: _lang == 'ne'
+                              ? 'जस्तै: कति तिर्नुपर्छ?'
+                              : 'e.g. How much do I owe?',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        onSubmitted: (_) => _askQuestion(),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _askBusy
+                        ? const SizedBox(
+                            width: 48,
+                            height: 48,
+                            child: Center(child: CircularProgressIndicator()),
+                          )
+                        : IconButton.filled(
+                            onPressed: _askQuestion,
+                            icon: const Icon(Icons.send),
+                          ),
+                  ],
+                ),
+                if (_answer != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    _answer!,
+                    style: const TextStyle(fontSize: 17, height: 1.5),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       ],
     );
   }
-    Widget _hero(
+
+  Widget _hero(
     ColorScheme scheme, {
     required String label,
     required String value,
