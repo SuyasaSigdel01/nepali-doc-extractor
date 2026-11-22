@@ -138,7 +138,8 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
     month = fields.get("reading_month")
 
     # payable / total
-    if any(w in q for w in ["tir", "pay", "jamma", "total", "kitti", "kati"]):
+    if any(w in q for w in ["tir", "pay", "jamma", "total", "kitti", "kati",
+                            "तिर", "कति", "जम्मा"]):
         if payable is not None:
             return f"{'जम्मा तिर्नुपर्ने रकम' if ne else 'Total payable'}: {'रू ' if ne else 'Rs '}{round(payable):,}"
         elif bill is not None:
