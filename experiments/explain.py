@@ -53,6 +53,8 @@ NEPALI_MONTHS = {
     "09": "पुष", "10": "माघ", "11": "फागुन", "12": "चैत",
 }
 
+    MONTHS_EN = ["January", "February", "March", "April", "May", "June",
+             "July", "August", "September", "October", "November", "December"]
 
 def rupees(amount: float) -> str:
     """Format an amount as Nepali rupees, rounded to whole rupees for speech."""
@@ -112,8 +114,7 @@ if __name__ == "__main__":
         for line in explain(fields, lang):
             print(line)
 
-    MONTHS_EN = ["January", "February", "March", "April", "May", "June",
-             "July", "August", "September", "October", "November", "December"]
+
 
 
 def format_ad_for_speech(iso: str) -> str:
