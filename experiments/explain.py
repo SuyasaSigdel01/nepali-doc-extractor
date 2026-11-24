@@ -125,10 +125,8 @@ def format_ad_for_speech(iso: str) -> str:
         return iso
 
 def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
-    """Answer a simple question about the extracted bill fields."""
     ne = lang == "ne"
     q = question.lower().strip()
-
     payable = fields.get("payable_amount")
     due = fields.get("due_amount")
     bill = fields.get("bill_amount")
@@ -137,7 +135,27 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
     meter = fields.get("meter_status", "")
     month = fields.get("reading_month")
 
-    # payable / total
+    # Order matters: first match wins.
+    # "kati"/"कति" appears in many questions, so topics that pair with it
+    # (due, units, meter) are checked before payable. Name/month words often
+    # appear inside payable questions ("yo mahina kati tirnu?"), so they go after.
+
+    if any(w in q for w in ["due", "baaki", "baki", "outstanding",
+                            "बाँकी", "बाकी", "बक्यौता"]):
+        if due is not None:
+            return f"{'बाँकी रकम' if ne else 'Due amount'}: {'रू ' if ne else 'Rs '}{round(due):,}"
+        return "बाँकी रकम छैन।" if ne else "No due amount found."
+
+    if any(w in q for w in ["unit", "khapat", "consum",
+                            "युनिट", "खपत"]):
+        if consumed is not None:
+            return f"{'खपत' if ne else 'Consumed'}: {round(consumed)} {'युनिट' if ne else 'units'}"
+        return "खपत विवरण भेटिएन।" if ne else "Consumption data not found."
+
+    if any(w in q for w in ["meter", "miṭar", "block", "status",
+                            "मिटर", "मीटर", "स्थिति"]):
+        return f"{'मिटर स्थिति' if ne else 'Meter status'}: {meter or ('अज्ञात' if ne else 'unknown')}"
+
     if any(w in q for w in ["tir", "pay", "jamma", "total", "kitti", "kati",
                             "तिर", "कति", "जम्मा"]):
         if payable is not None:
@@ -145,38 +163,13 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
         elif bill is not None:
             return f"{'बिल रकम' if ne else 'Bill amount'}: {'रू ' if ne else 'Rs '}{round(bill):,}"
 
-    # due / baaki
-    if any(w in q for w in ["due", "baaki", "baki", "outstanding",
-                            "बाँकी", "बाकी", "बक्यौता"]):
-        if due is not None:
-            return f"{'बाँकी रकम' if ne else 'Due amount'}: {'रू ' if ne else 'Rs '}{round(due):,}"
-        return "बाँकी रकम छैन।" if ne else "No due amount found."
-
-    # consumed units
-    if any(w in q for w in ["unit", "khapat", "paani", "water", "consum",
-                            "युनिट", "खपत"]):
-        if consumed is not None:
-            return f"{'खपत' if ne else 'Consumed'}: {round(consumed)} {'युनिट' if ne else 'units'}"
-        return "खपत विवरण भेटिएन।" if ne else "Consumption data not found."
-
-    # meter status
-    if any(w in q for w in ["meter", "miṭar", "block", "status",
-                            "मिटर", "मीटर", "स्थिति"]):
-        return f"{'मिटर स्थिति' if ne else 'Meter status'}: {meter or ('अज्ञात' if ne else 'unknown')}"
-
-    # name
     if any(w in q for w in ["name", "naam", "customer",
                             "नाम"]):
         return f"{'नाम' if ne else 'Name'}: {name or ('भेटिएन' if ne else 'not found')}"
 
-    # month
     if any(w in q for w in ["month", "mahina", "mahena",
                             "महिना", "मैना"]):
         return f"{'महिना' if ne else 'Month'}: {month or ('भेटिएन' if ne else 'not found')}"
 
-    # fallback
-    return (
-        "माफ गर्नुस्, यो प्रश्नको जवाफ दिन सकिएन।"
-        if ne else
-        "Sorry, I could not answer that question from the bill."
-    )
+    return ("माफ गर्नुस्, यो प्रश्नको जवाफ दिन सकिएन।" if ne
+            else "Sorry, I could not answer that question from the bill.")
