@@ -86,6 +86,7 @@ async def save_upload(file: UploadFile) -> Path:
 async def extract_document(file: UploadFile = File(...)):
     """Take a document photo, return fields, explanations and audio URLs."""
     tmp_path = await save_upload(file)
+    ocr_json = None
 
     try:
         ocr_json = run_ocr(tmp_path)
@@ -115,6 +116,8 @@ async def extract_document(file: UploadFile = File(...)):
         return result
     finally:
         tmp_path.unlink(missing_ok=True)
+        if ocr_json is not None:
+            ocr_json.unlink(missing_ok=True)
 
 
 @app.get("/audio/{name}")
