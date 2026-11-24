@@ -134,6 +134,8 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
     name = fields.get("customer_name") or fields.get("name")
     meter = fields.get("meter_status", "")
     month = fields.get("reading_month")
+    money = rupees if ne else (lambda a: f"Rs {round(a):,}")
+    num = (lambda n: to_nepali_digits(str(n))) if ne else str
 
     # Order matters: first match wins.
     # "kati"/"कति" appears in many questions, so topics that pair with it
@@ -143,13 +145,13 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
     if any(w in q for w in ["due", "baaki", "baki", "outstanding",
                             "बाँकी", "बाकी", "बक्यौता"]):
         if due is not None:
-            return f"{'बाँकी रकम' if ne else 'Due amount'}: {'रू ' if ne else 'Rs '}{round(due):,}"
+            return f"{'बाँकी रकम' if ne else 'Due amount'}: {money(due)}"
         return "बाँकी रकम छैन।" if ne else "No due amount found."
 
     if any(w in q for w in ["unit", "khapat", "consum",
                             "युनिट", "खपत"]):
         if consumed is not None:
-            return f"{'खपत' if ne else 'Consumed'}: {round(consumed)} {'युनिट' if ne else 'units'}"
+            return f"{'खपत' if ne else 'Consumed'}: {num(round(consumed))} {'युनिट' if ne else 'units'}"
         return "खपत विवरण भेटिएन।" if ne else "Consumption data not found."
 
     if any(w in q for w in ["meter", "miṭar", "block", "status",
@@ -159,9 +161,9 @@ def answer_question(fields: dict, question: str, lang: str = "ne") -> str:
     if any(w in q for w in ["tir", "pay", "jamma", "total", "kitti", "kati",
                             "तिर", "कति", "जम्मा"]):
         if payable is not None:
-            return f"{'जम्मा तिर्नुपर्ने रकम' if ne else 'Total payable'}: {'रू ' if ne else 'Rs '}{round(payable):,}"
+            return f"{'जम्मा तिर्नुपर्ने रकम' if ne else 'Total payable'}: {money(payable)}"
         elif bill is not None:
-            return f"{'बिल रकम' if ne else 'Bill amount'}: {'रू ' if ne else 'Rs '}{round(bill):,}"
+            return f"{'बिल रकम' if ne else 'Bill amount'}: {money(bill)}"
 
     if any(w in q for w in ["name", "naam", "customer",
                             "नाम"]):
