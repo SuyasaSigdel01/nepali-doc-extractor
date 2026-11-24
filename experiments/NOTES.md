@@ -164,13 +164,13 @@ tileGridSize=8x8) before OCR.
 | Field | Truth | Raw OCR | Preprocessed |
 |---|---|---|---|
 | Reading Date | 2083-4-6 | `२०४३ 4-6` | `२083 4 6` |
-| Customer ID | 493-11846 | `४93-11846` | `493-11846` |
+| Customer ID | 100-00000 (redacted) | `१00-00000` | `100-00000` |
 | Area no | 04-01-135 | `04 0।-1३५` | `04 01-135` |
 | Bill Amount | 560.00 | `५६० ००` | `5६0.0०` |
 | Payable Amount | 1103.20 | `1१०३ २०` | `1१०३.२०` |
 | Previous Unit | 488.00 | `४४४` (444) | `४८४` (484) |
 | Current Unit | 488.00 | `४४८` (448) | `४४8` (448) |
-| Reader Mobile | 9847165143 | `9847165143` | `98471 65(42` |
+| Reader Mobile | 98XXXXXXXX (redacted) | read exactly | mangled (2 digits wrong) |
 
 **Gains:** the reading date went from a wrong year (2043) to correct (2083).
 Customer ID and area code became exactly right. Decimal points were recovered
