@@ -7,7 +7,8 @@ import sys
 import tempfile
 import uuid
 from pathlib import Path
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -128,9 +129,9 @@ def get_audio(name: str):
     return FileResponse(path, media_type="audio/mpeg")
 
 class AskRequest(BaseModel):
-    question: str
-    fields: dict
-    lang: str = "ne"
+    question: str = Field(min_length=1, max_length=200)
+    fields: dict = Field(max_length=40)
+    lang: Literal["ne", "en"] = "ne"
 
 
 @app.post("/ask")
@@ -138,6 +139,8 @@ async def ask_question(req: AskRequest):
     """Answer a user question about an already-extracted document."""
     from explain import answer_question  # noqa: E402
     spoken = answer_question(req.fields, req.question, req.lang)
+    if len(spoken) > 300:
+        raise HTTPException(422, "Answer too long")
     job = uuid.uuid4().hex[:8]
     audio_path = AUDIO_DIR / f"{job}_ask.mp3"
     speak([spoken], audio_path, req.lang)
