@@ -5,6 +5,7 @@ Mobile client posts an image, gets back fields, explanations and audio.
 
 import sys
 import tempfile
+import time
 import uuid
 from pathlib import Path
 from typing import Literal
@@ -38,13 +39,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AUDIO_DIR = ROOT / "data" / "audio"
+# API replies get their own folder, separate from experiment outputs in
+# data/audio, so the cleanup below can never delete research files.
+AUDIO_DIR = ROOT / "data" / "api_audio"
 WEB_DIR = ROOT / "web"
 
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024          # 8 MB — a phone photo is 2-4 MB
 ALLOWED_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 Image.MAX_IMAGE_PIXELS = 50_000_000         # refuse decompression bombs
+
+AUDIO_TTL_SECONDS = 60 * 60                 # keep spoken replies for an hour
+
+
+def prune_old_audio() -> None:
+    """Delete generated audio older than AUDIO_TTL_SECONDS."""
+    cutoff = time.time() - AUDIO_TTL_SECONDS
+    for f in AUDIO_DIR.glob("*.mp3"):
+        try:
+            if f.stat().st_mtime < cutoff:
+                f.unlink()
+        except FileNotFoundError:
+            pass  # another request already removed it
 
 
 @app.get("/health")
