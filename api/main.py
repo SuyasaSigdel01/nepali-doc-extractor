@@ -119,7 +119,8 @@ def process_document(tmp_path: Path) -> dict:
         else:
             raise HTTPException(422, "Document type not recognised")
 
-        job = uuid.uuid4().hex[:8]
+        prune_old_audio()
+        job = uuid.uuid4().hex
         result = {"fields": fields, "explanations": {}, "audio": {}}
 
         for lang in ("ne", "en"):
@@ -164,7 +165,8 @@ def ask_question(req: AskRequest):
     spoken = answer_question(req.fields, req.question, req.lang)
     if len(spoken) > 300:
         raise HTTPException(422, "Answer too long")
-    job = uuid.uuid4().hex[:8]
+    prune_old_audio()
+    job = uuid.uuid4().hex
     audio_path = AUDIO_DIR / f"{job}_ask.mp3"
     speak([spoken], audio_path, req.lang)
     return {
