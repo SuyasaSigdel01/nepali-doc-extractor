@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from PIL import Image
 
@@ -83,12 +84,9 @@ async def save_upload(file: UploadFile) -> Path:
     return tmp_path
 
 
-@app.post("/extract")
-async def extract_document(file: UploadFile = File(...)):
-    """Take a document photo, return fields, explanations and audio URLs."""
-    tmp_path = await save_upload(file)
+def process_document(tmp_path: Path) -> dict:
+    """The slow part: OCR, extraction and speech. Runs in a worker thread."""
     ocr_json = None
-
     try:
         ocr_json = run_ocr(tmp_path)
         lines = lines_from_ocr_json(ocr_json)
@@ -116,9 +114,18 @@ async def extract_document(file: UploadFile = File(...)):
 
         return result
     finally:
-        tmp_path.unlink(missing_ok=True)
         if ocr_json is not None:
             ocr_json.unlink(missing_ok=True)
+
+
+@app.post("/extract")
+async def extract_document(file: UploadFile = File(...)):
+    """Take a document photo, return fields, explanations and audio URLs."""
+    tmp_path = await save_upload(file)
+    try:
+        return await run_in_threadpool(process_document, tmp_path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
 
 
 @app.get("/audio/{name}")
@@ -135,7 +142,7 @@ class AskRequest(BaseModel):
 
 
 @app.post("/ask")
-async def ask_question(req: AskRequest):
+def ask_question(req: AskRequest):
     """Answer a user question about an already-extracted document."""
     from explain import answer_question  # noqa: E402
     spoken = answer_question(req.fields, req.question, req.lang)
